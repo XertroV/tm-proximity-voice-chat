@@ -1,0 +1,9 @@
+[meta]
+name     = "Proximity Voice Chat"
+author   = "XertroV"
+category = "Voice Chat"
+version  = "0.9.0"
+
+[script]
+#__DEFINES__
+# dependencies = ["MLHook", "MLFeedRaceData"]
