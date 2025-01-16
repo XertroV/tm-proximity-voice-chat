@@ -14,6 +14,32 @@ void Main() {
     @server = ServerConn();
 }
 
+void RenderMenuMain() {
+    if (UI::BeginMenu(MenuTitle)) {
+        if (UI::BeginMenu("Messages")) {
+            auto @keys = server.recvCount.GetKeys();
+            UI::SeparatorText("Received Messages");
+            for (uint i = 0; i < keys.Length; i++) {
+                auto key = keys[i];
+                auto count = uint64(server.recvCount[key]);
+                if (UI::MenuItem(key + " (" + count + ")")) {
+                }
+            }
+            UI::SeparatorText("Sent Messages");
+            @keys = server.sendCount.GetKeys();
+            for (uint i = 0; i < keys.Length; i++) {
+                auto key = keys[i];
+                auto count = uint64(server.sendCount[key]);
+                if (UI::MenuItem(key + " (" + count + ")")) {
+                }
+            }
+
+            UI::EndMenu();
+        }
+        UI::EndMenu();
+    }
+}
+
 [Setting category="General" name="Always use map chat over server chat" description="If enabled, all chat messages will be sent to the map VC room instead of the server VC room."]
 bool S_AlwaysUseMapChatOverServerChat = false;
 

@@ -14,7 +14,6 @@ namespace VarInt {
         while (value >= 0x80) {
             b = uint8(value) | 0x80;
             if (!s.Write(b)) return false;
-            trace("wrote: " + b);
             value >>= 7;
         }
         return s.Write(uint8(value));

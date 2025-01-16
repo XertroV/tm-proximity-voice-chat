@@ -1,3 +1,5 @@
+const uint PING_PERIOD = 6789;
+
 class ServerConn {
     // protected MsgHandler@[] msgHandlers;
     dictionary msgHandlers;
@@ -104,6 +106,8 @@ class ServerConn {
         startnew(CoroutineFuncUserdataUint64(SendLoop), nonce);
         startnew(CoroutineFuncUserdataUint64(SendPingLoop), nonce);
         startnew(CoroutineFuncUserdataUint64(ReconnectWhenDisconnected), nonce);
+        startnew(CoroutineFuncUserdataUint64(WatchForServerChange), nonce);
+        startnew(CoroutineFuncUserdataUint64(WatchPosAndCam), nonce);
     }
 
     void ReconnectWhenDisconnected(uint64 nonce) {
@@ -169,6 +173,9 @@ class ServerConn {
     }
 
     void HandleRawMsg(RawMessage@ msg) {
+        // if (msg.msgType == "Ping") {
+        //     lastPingTime = Time::Now;
+        // }
         if (!msgHandlers.Exists(msg.msgType) || GetHandler(msg.msgType) is null) {
             warn("Unhandled message type: " + msg.msgType + ". Handler exists: " + msgHandlers.Exists(msg.msgType));
             return;
@@ -186,13 +193,14 @@ class ServerConn {
     dictionary sendCount;
 
     protected void LogSentType(OutgoingMsg@ msg) {
-        if (sendCount.Exists(msg.msgType)) {
-            sendCount[msg.msgType] = int64(sendCount[msg.msgType]) + 1;
+        LogSentType(msg.msgType);
+    }
+
+    protected void LogSentType(const string &in type) {
+        if (sendCount.Exists(type)) {
+            sendCount[type] = int64(sendCount[type]) + 1;
         } else {
-            sendCount[msg.msgType] = int64(1);
-        }
-        if (msg.msgType != "Ping") {
-            dev_trace("Sent message type: " + tostring(msg.msgType));
+            sendCount[type] = int64(1);
         }
     }
 
@@ -208,13 +216,14 @@ class ServerConn {
     protected void SendPingLoop(uint64 nonce) {
         pingTimeoutCount = 0;
         while (!IsBadNonce(nonce)) {
-            sleep(6789);
+            sleep(PING_PERIOD);
             if (IsShutdownClosedOrDC) {
                 return;
             }
             if (IsBadNonce(nonce)) return;
             QueueMsg(PingMsg());
-            if (Time::Now - lastPingTime > 45000 && IsReady) {
+            yield(2);
+            if (Time::Now - lastPingTime > PING_PERIOD + 1000 && IsReady) {
                 if (IsBadNonce(nonce)) return;
                 pingTimeoutCount++;
                 if (pingTimeoutCount > 3) {
@@ -234,6 +243,91 @@ class ServerConn {
         @msgHandlers["ConnectedStatus"] = MsgHandler(OnMsg_ConnectedStatus);
         @msgHandlers["Ping"] = MsgHandler(OnMsg_Ping);
     }
+
+    // server login on map uid
+    string lastRoomId;
+    void WatchForServerChange(uint64 nonce) {
+        string serverLogin = GetServerLogin();
+        while (!IsBadNonce(nonce)) {
+            if (IsShutdownClosedOrDC) {
+                return;
+            }
+            sleep(100);
+            if ((serverLogin = GetServerLogin()) != lastRoomId) {
+                lastRoomId = serverLogin;
+                QueueMsg(GetServerDetailsMsg());
+            }
+        }
+    }
+
+    Json::Value posAndCamJ = GenEmptyPosAndCamJ();
+
+    // vec3 pos, dir, up, camPos, camDir, camUp;
+    void UpdatePlayerPosAndCam(CSmScriptPlayer@ script) {
+        auto s = socket.s;
+        VarInt::EncodeUint(s, 1 + (4 * 3 * 3 * 2) );
+        s.Write(uint8(1)); // 1
+        s.Write(float(script.Position.x)); // 5
+        s.Write(float(script.Position.y)); // 9
+        s.Write(float(script.Position.z));  // 13
+        s.Write(float(script.AimDirection.x));  // 17
+        s.Write(float(script.AimDirection.y));  // 21
+        s.Write(float(script.AimDirection.z));
+        s.Write(float(script.UpDirection.x));
+        s.Write(float(script.UpDirection.y));
+        s.Write(float(script.UpDirection.z));
+        auto cam = Camera::GetCurrent();
+        auto mat = cam.NextLocation;
+        s.Write(float(mat.tx));
+        s.Write(float(mat.ty));
+        s.Write(float(mat.tz));
+        s.Write(float(mat.xz));
+        s.Write(float(mat.yz));
+        s.Write(float(mat.zz));
+        s.Write(float(mat.xy));
+        s.Write(float(mat.yy));
+        bool success = s.Write(float(mat.zy));
+        if (!success) {
+            warn("Failed to write to socket");
+        }
+        LogSentType("Positions");
+        // camDir.x = mat.xz;
+        // camDir.y = mat.yz;
+        // camDir.z = mat.zz;
+        // camUp.x = mat.xy;
+        // camUp.y = mat.yy;
+        // camUp.z = mat.zy;
+        // camPos.x = mat.tx;
+        // camPos.y = mat.ty;
+        // camPos.z = mat.tz;
+        // SetVec3J(posAndCamJ["p"]["pos"], pos.x, pos.y, pos.z);
+        // SetVec3J(posAndCamJ["p"]["dir"], dir.x, dir.y, dir.z);
+        // SetVec3J(posAndCamJ["p"]["up"], up.x, up.y, up.z);
+        // SetVec3J(posAndCamJ["c"]["pos"], camPos.x, camPos.y, camPos.z);
+        // SetVec3J(posAndCamJ["c"]["dir"], camDir.x, camDir.y, camDir.z);
+        // SetVec3J(posAndCamJ["c"]["up"], camUp.x, camUp.y, camUp.z);
+    }
+
+    void WatchPosAndCam(uint64 nonce) {
+        auto app = GetApp();
+        while (!IsBadNonce(nonce)) {
+            if (IsShutdownClosedOrDC) {
+                return;
+            }
+            if (app.CurrentPlayground !is null) {
+                try {
+                    auto cp = cast<CSmArenaClient>(app.CurrentPlayground);
+                    auto gt = cp.GameTerminals[0];
+                    auto p = cast<CSmPlayer>(gt.ControlledPlayer);
+                    auto script = cast<CSmScriptPlayer>(p.ScriptAPI);
+                    UpdatePlayerPosAndCam(script);
+                } catch {
+                    dev_warn("Failed to update player pos and cam: " + getExceptionInfo());
+                }
+            }
+            yield();
+        }
+    }
 }
 
 bool G_ConnectedToMumble = false;
@@ -244,5 +338,42 @@ void OnMsg_ConnectedStatus(Json::Value@ msg) {
 }
 
 void OnMsg_Ping(Json::Value@ msg) {
-    dev_trace("Ping response: " + Json::Write(msg));
+    server.lastPingTime = Time::Now;
+}
+
+Json::Value GenEmptyPosAndCamJ() {
+    auto j = Json::Object();
+    j["p"] = GenEmptyMPosStructJ();
+    j["c"] = GenEmptyMPosStructJ();
+    return j;
+}
+
+Json::Value GenEmptyMPosStructJ() {
+    auto j = Json::Object();
+    j["pos"] = GenVec3J(0.01, 0.01, 0.01);
+    j["dir"] = GenVec3J(0, 0, 1);
+    j["up"] = GenVec3J(0, 1, 0);
+    return j;
+}
+
+Json::Value GenEmptyVec3J() {
+    auto j = Json::Array();
+    j.Add(0.0);
+    j.Add(0.0);
+    j.Add(0.0);
+    return j;
+}
+
+Json::Value GenVec3J(float x, float y, float z) {
+    auto j = Json::Array();
+    j.Add(x);
+    j.Add(y);
+    j.Add(z);
+    return j;
+}
+
+void SetVec3J(Json::Value@ j, float x, float y, float z) {
+    j[0] = x;
+    j[1] = y;
+    j[2] = z;
 }

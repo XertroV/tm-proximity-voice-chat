@@ -2,6 +2,8 @@
 // Modified to fit rust message-io library
 // updated 2024-05-19 for new openplanet socket
 
+const uint TIMEOUT_CONNECT = 2000;
+
 class BetterSocket {
     Net::Socket@ s;
     bool IsConnecting = false;
@@ -40,7 +42,7 @@ class BetterSocket {
             warn("Failed to connect to " + addr + ":" + port);
         } else {
             @s = socket;
-            auto timeout = Time::Now + 8000;
+            auto timeout = Time::Now + TIMEOUT_CONNECT;
             while (s !is null && !s.IsReady() && Time::Now < timeout) yield();
             if (s is null) return;
             if (!s.IsReady()) {
@@ -91,18 +93,18 @@ class BetterSocket {
 
     // true if last message was received more than 1 minute ago
     bool get_LastMsgRecievedLongAgo() {
-        return Time::Now - lastMessageRecvTime > 40000;
+        return Time::Now - lastMessageRecvTime > 10000;
     }
 
     protected RawMessage tmpBuf;
     uint lastMessageRecvTime = 0;
 
     // parse msg immediately
-    RawMessage@ ReadMsg(uint timeout = 40000) {
+    RawMessage@ ReadMsg(uint timeout = 10000) {
         // read msg length
         // read msg data
         uint startReadTime = Time::Now;
-        while (Available < 4 && !IsClosed && !ServerDisconnected && (timeout <= 0 || Time::Now - startReadTime < timeout)) yield();
+        while (Available < 4 && !IsClosed && !ServerDisconnected && (timeout <= 0 || Time::Now < timeout + startReadTime)) yield();
         if (timeout > 0 && Time::Now - startReadTime >= timeout) {
             yield();
             if (Available < 4 && !IsClosed && !ServerDisconnected) {
@@ -151,7 +153,7 @@ class BetterSocket {
     void WriteMsg(const string &in msgType, Json::Value@ msgDataJ) {
         auto @j = Json::Object();
         j[msgType] = msgDataJ;
-        auto msgData = Json::Write(j);
+        auto msgData = "{\"" + msgType + "\":" + Json::Write(msgDataJ) + "}";
 
         if (s is null) {
             if (msgType != "Ping")
@@ -159,10 +161,10 @@ class BetterSocket {
             return;
         }
 
-        MemoryBuffer encodedLen = VarInt::EncodeUint(msgData.Length);
-        encodedLen.Seek(0);
-        auto encodedLenStr = encodedLen.ReadToHex(encodedLen.GetSize());
-        warn("encodedLenStr: " + encodedLenStr + "; len: " + msgData.Length + "; msgType: " + msgType + "; msgData: " + msgData);
+        // MemoryBuffer encodedLen = VarInt::EncodeUint(msgData.Length);
+        // encodedLen.Seek(0);
+        // auto encodedLenStr = encodedLen.ReadToHex(encodedLen.GetSize());
+        // warn("encodedLenStr: " + encodedLenStr + "; len: " + msgData.Length + "; msgType: " + msgType + "; msgData: " + msgData);
 
 
         bool success = true;
