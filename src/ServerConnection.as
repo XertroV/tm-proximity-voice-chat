@@ -205,6 +205,7 @@ class ServerConn {
         } else {
             sendCount[type] = int64(1);
         }
+        socket.lastSentTime = Time::Now;
     }
 
     protected void LogRecvType(RawMessage@ msg) {
@@ -213,6 +214,17 @@ class ServerConn {
         } else {
             recvCount[msg.msgType] = int64(1);
         }
+        socket.lastMessageRecvTime = Time::Now;
+    }
+
+    string LastSentTimeStr() {
+        if (socket is null) return "\\$<\\$999--:--\\$>";
+        return Time::Format(Time::Now - socket.lastSentTime, true, true, false);
+    }
+
+    string LastRecvTimeStr() {
+        if (socket is null) return "\\$<\\$999--:--\\$>";
+        return Time::Format(Time::Now - socket.lastMessageRecvTime, true, true, false);
     }
 
     uint lastPingTime, pingTimeoutCount;
@@ -266,6 +278,19 @@ class ServerConn {
     }
 
     Json::Value posAndCamJ = GenEmptyPosAndCamJ();
+
+    void SendFixedPosAndCam_PointingAway(float x, float y, float z) {
+        auto s = socket.s;
+        VarInt::EncodeUint(s, 73); // 1 + (4 * 3 * 3 * 2) = 73
+        s.Write(uint8(1)); // 1
+        bool success = WriteVec3(s, x, y, z*-1.0)
+            && WriteVec3(s, -ROOT2ON2, 0, ROOT2ON2)
+            && WriteVec3(s, 0, 1, 0)
+            && WriteVec3(s, x, y, z*-1.0)
+            && WriteVec3(s, -ROOT2ON2, 0, ROOT2ON2)
+            && WriteVec3(s, 0, 1, 0);
+        LogSentType("Positions");
+    }
 
     void SendZeroPlayerPosAndCam() {
         auto s = socket.s;
@@ -359,7 +384,11 @@ class ServerConn {
                     auto gt = cp.GameTerminals[0];
                     auto p = cast<CSmPlayer>(gt.ControlledPlayer);
                     auto script = cast<CSmScriptPlayer>(p.ScriptAPI);
-                    UpdatePlayerPosAndCam(script);
+                    if (IsSpawned(cp, gt, p, script)) {
+                        UpdatePlayerPosAndCam(script);
+                    } else {
+                        SendFixedPosAndCam_PointingAway(-100., -100., -100.);
+                    }
                     wasNullCtx = false;
                 } catch {
                     dev_warn("Failed to update player pos and cam: " + getExceptionInfo());
@@ -419,4 +448,27 @@ void SetVec3J(Json::Value@ j, float x, float y, float z) {
     j[0] = x;
     j[1] = y;
     j[2] = z;
+}
+
+bool WriteVec3(Net::Socket@ s, float x, float y, float z) {
+    return s.Write(float(x)) && s.Write(float(y)) && s.Write(float(z));
+}
+
+const float ROOT2ON2 = 0.7071067811865476;
+
+
+bool IsSpawned(CSmArenaClient@ cp, CGameTerminal@ gt, CSmPlayer@ p, CSmScriptPlayer@ script) {
+#if DEPENDENCY_MLFEEDRACEDATA
+    // return MLFeed::GetRaceData_V4().LocalPlayer.IsSpawned;
+#endif
+    // playing = 1, finish == 11
+    auto seq = int(gt.UISequence_Current);
+    if (seq != 1 && seq != 11) {
+        return false;
+    }
+    int rulesStartTime = int(cp.Arena.Rules.RulesStateStartTime);
+    if (rulesStartTime < 0 || script.StartTime + 1500 < rulesStartTime) return false;
+    // during 3.2.1.go
+    if (script.StartTime > 0 && script.StartTime + 1500 > rulesStartTime) return true;
+    return int(script.Post) == 2;
 }

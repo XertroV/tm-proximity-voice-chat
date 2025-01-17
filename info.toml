@@ -7,3 +7,4 @@ version  = "0.9.0"
 [script]
 #__DEFINES__
 dependencies = ["Camera"]
+optional_dependencies = ["MLFeedRaceData"]

@@ -93,14 +93,14 @@ class BetterSocket {
 
     // true if last message was received more than 1 minute ago
     bool get_LastMsgRecievedLongAgo() {
-        return Time::Now - lastMessageRecvTime > 10000;
+        return Time::Now - lastMessageRecvTime > 12000;
     }
 
     protected RawMessage tmpBuf;
-    uint lastMessageRecvTime = 0;
+    uint64 lastMessageRecvTime = 0;
 
     // parse msg immediately
-    RawMessage@ ReadMsg(uint timeout = 10000) {
+    RawMessage@ ReadMsg(uint timeout = 12000) {
         // read msg length
         // read msg data
         uint startReadTime = Time::Now;
@@ -150,6 +150,8 @@ class BetterSocket {
         return tmpBuf;
     }
 
+    uint64 lastSentTime = 0;
+
     void WriteMsg(const string &in msgType, Json::Value@ msgDataJ) {
         auto @j = Json::Object();
         j[msgType] = msgDataJ;
@@ -174,6 +176,7 @@ class BetterSocket {
             warn("failure to write message? " + msgType + " / " + msgData.Length + " bytes");
             // this.Shutdown();
         }
+        lastSentTime = Time::Now;
     }
 }
 
@@ -215,7 +218,9 @@ class RawMessage {
         }
         msgType = keys[0];
         @msgJson = msgJson[msgType];
-        trace("Received message: " + msgType + " / " + msgData);
+        if (msgType != "Ping") {
+            dev_trace("Received message: " + msgType + " / " + msgData);
+        }
     }
 
     bool get_IsPing() {
