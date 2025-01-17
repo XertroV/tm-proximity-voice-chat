@@ -1,5 +1,8 @@
 const uint PING_PERIOD = 6789;
 
+// mumble defaults 1m and 15m. A base of like 32m means 15 scales to 480m
+const float MUMBLE_SCALE = 1. / 32.;
+
 class ServerConn {
     // protected MsgHandler@[] msgHandlers;
     dictionary msgHandlers;
@@ -245,16 +248,18 @@ class ServerConn {
     }
 
     // server login on map uid
-    string lastRoomId;
+    string lastRoomId, lastTeam;
     void WatchForServerChange(uint64 nonce) {
         string serverLogin = GetServerLogin();
+        string team = GetServerTeamIfTeams();
         while (!IsBadNonce(nonce)) {
             if (IsShutdownClosedOrDC) {
                 return;
             }
             sleep(100);
-            if ((serverLogin = GetServerLogin()) != lastRoomId) {
+            if ((serverLogin = GetServerLogin()) != lastRoomId || (team = GetServerTeamIfTeams()) != lastTeam) {
                 lastRoomId = serverLogin;
+                lastTeam = team;
                 QueueMsg(GetServerDetailsMsg());
             }
         }
@@ -262,31 +267,64 @@ class ServerConn {
 
     Json::Value posAndCamJ = GenEmptyPosAndCamJ();
 
+    void SendZeroPlayerPosAndCam() {
+        auto s = socket.s;
+        VarInt::EncodeUint(s, 73); // 1 + (4 * 3 * 3 * 2) = 73
+        s.Write(uint8(1)); // 1
+        // pos
+        s.Write(float(0.01)); // 5
+        s.Write(float(0.01));
+        s.Write(float(0.01));
+        // dir
+        s.Write(float(0));
+        s.Write(float(0));
+        s.Write(float(-1));
+        // up
+        s.Write(float(0));
+        s.Write(float(1));
+        s.Write(float(0));
+        // cpos
+        s.Write(float(0.01));
+        s.Write(float(0.01));
+        s.Write(float(0.01));
+        // cdir
+        s.Write(float(0));
+        s.Write(float(0));
+        s.Write(float(-1));
+        // cup
+        s.Write(float(0));
+        s.Write(float(1));
+        s.Write(float(0));
+        LogSentType("Positions");
+    }
+
     // vec3 pos, dir, up, camPos, camDir, camUp;
     void UpdatePlayerPosAndCam(CSmScriptPlayer@ script) {
         auto s = socket.s;
-        VarInt::EncodeUint(s, 1 + (4 * 3 * 3 * 2) );
+        VarInt::EncodeUint(s, 73); // 1 + (4 * 3 * 3 * 2) = 73
         s.Write(uint8(1)); // 1
-        s.Write(float(script.Position.x)); // 5
-        s.Write(float(script.Position.y)); // 9
-        s.Write(float(script.Position.z));  // 13
+        // mumble proximity defaults are 1m and 15m so divide pos by 32
+        // the server uses left handed coords, but tm uses right handed coords, so flip the z axis
+        s.Write(float(script.Position.x * MUMBLE_SCALE)); // 5
+        s.Write(float(script.Position.y * MUMBLE_SCALE)); // 9
+        s.Write(float(script.Position.z * MUMBLE_SCALE * -1.));  // 13
         s.Write(float(script.AimDirection.x));  // 17
         s.Write(float(script.AimDirection.y));  // 21
-        s.Write(float(script.AimDirection.z));
+        s.Write(float(script.AimDirection.z * -1.));
         s.Write(float(script.UpDirection.x));
         s.Write(float(script.UpDirection.y));
-        s.Write(float(script.UpDirection.z));
+        s.Write(float(script.UpDirection.z * -1.));
         auto cam = Camera::GetCurrent();
         auto mat = cam.NextLocation;
-        s.Write(float(mat.tx));
-        s.Write(float(mat.ty));
-        s.Write(float(mat.tz));
+        s.Write(float(mat.tx * MUMBLE_SCALE));
+        s.Write(float(mat.ty * MUMBLE_SCALE));
+        s.Write(float(mat.tz * MUMBLE_SCALE * -1.));
         s.Write(float(mat.xz));
         s.Write(float(mat.yz));
-        s.Write(float(mat.zz));
+        s.Write(float(mat.zz * -1.));
         s.Write(float(mat.xy));
         s.Write(float(mat.yy));
-        bool success = s.Write(float(mat.zy));
+        bool success = s.Write(float(mat.zy * -1.));
         if (!success) {
             warn("Failed to write to socket");
         }
@@ -310,6 +348,7 @@ class ServerConn {
 
     void WatchPosAndCam(uint64 nonce) {
         auto app = GetApp();
+        bool wasNullCtx = false;
         while (!IsBadNonce(nonce)) {
             if (IsShutdownClosedOrDC) {
                 return;
@@ -321,9 +360,13 @@ class ServerConn {
                     auto p = cast<CSmPlayer>(gt.ControlledPlayer);
                     auto script = cast<CSmScriptPlayer>(p.ScriptAPI);
                     UpdatePlayerPosAndCam(script);
+                    wasNullCtx = false;
                 } catch {
                     dev_warn("Failed to update player pos and cam: " + getExceptionInfo());
                 }
+            } else if (!wasNullCtx) {
+                wasNullCtx = true;
+                SendZeroPlayerPosAndCam();
             }
             yield();
         }

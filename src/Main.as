@@ -66,8 +66,13 @@ string GetServerTeamIfTeams() {
     auto si = cast<CTrackManiaNetworkServerInfo>(app.Network.ServerInfo);
     if (si.ServerLogin.Length > 0 && si.CurGameModeStr.Length > 0) {
         if (si.CurGameModeStr.Contains("Team")) {
-            auto pi = cast<CTrackManiaPlayerInfo>(app.Network.PlayerInfos[0]);
-            return tostring(pi.PlaygroundTeamRequested);
+            try {
+                auto cp = cast<CSmArenaClient>(app.CurrentPlayground);
+                auto p = cast<CSmPlayer>(cp.GameTerminals[0].ControlledPlayer);
+                return tostring(p.EdClan);
+            } catch {
+                return "0";
+            }
         }
     }
     return "All";
