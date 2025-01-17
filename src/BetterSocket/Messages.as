@@ -57,7 +57,40 @@ OutgoingMsg@ GetPlayerDetailsMsg() {
 
 OutgoingMsg@ GetServerDetailsMsg() {
     auto @j = Json::Array();
-    j.Add(GetServerLogin());
+    j.Add(ObfsUidOrSvrLogin(GetServerLogin()));
     j.Add(GetServerTeamIfTeams());
     return OutgoingMsg("ServerDetails", j);
+}
+
+string ObfsUidOrSvrLogin(const string &in svrLogin) {
+    if (svrLogin.Length == 0) {
+        return svrLogin;
+    }
+    MemoryBuffer@ buf = MemoryBuffer(16);
+    buf.WriteFromHex(Crypto::MD5(svrLogin));
+    return base63Encode(buf);
+}
+
+const string BASE63 = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
+const string EMPTY_25_CHARS = "                         ";
+string base63Encode(MemoryBuffer@ buf) {
+    buf.Seek(0);
+    auto size = buf.GetSize();
+    // preallocate 25 chars
+    string ret = EMPTY_25_CHARS;
+    uint64 val = 0;
+    uint ix = 0;
+    for (uint i = 0; i < size; i++) {
+        val = (val << 8) | uint8(buf.ReadUInt8());
+        while (val >= 63 && ix < 25) {
+            ret[ix++] = BASE63[val % 63];
+            val /= 63;
+        }
+    }
+    if (val > 0 && ix < 25) {
+        ret[ix++] = BASE63[val % 63];
+    }
+    ret = ret.SubStr(0, ix);
+    print("base63Encode: " + ret + " (" + size + " -> " + ret.Length + ")");
+    return ret;
 }
