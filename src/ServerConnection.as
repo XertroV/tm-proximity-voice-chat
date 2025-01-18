@@ -327,6 +327,44 @@ class ServerConn {
         UpdatePlayerPosAndCam(HasVectors(vis));
         // trace("UpdateMp4_PPAC_InPlayground, vis.Pos: " + vis.Position.ToString());
     }
+#elif TMNEXT
+    void UpdateTm2020_PPAC_InPlayground(CGameCtnApp@ app) {
+        auto cp = cast<CSmArenaClient>(app.CurrentPlayground);
+        if (cp is null) {
+            // Turns out, CGamePlaygroundBasic appears for like a frame when switching maps
+            // since it's just one frame, we can ignore it
+            return;
+            // auto ty = Reflection::TypeOf(app.CurrentPlayground);
+            // NotifyWarning("CP type: " + ty.Name + " | Class ID: " + Text::Format("%08x", ty.ID));
+            // lastPlayerStatus = PlayerStatus::None_NoMap;
+            // UpdatePPAC_From(socket.s, null, Camera::GetCurrent(), VE_Loc::NearZero, VE_Loc::NearZero);
+        }
+        // if (cp.GameTerminals) {
+        //     NotifyWarning("GameTerminals null!");
+        //     UpdatePPAC_From(socket.s, null, Camera::GetCurrent(), VE_Loc::NearZero, VE_Loc::NearZero);
+        //     return;
+        // }
+        if (cp.GameTerminals.Length > 0) {
+            auto gt = cp.GameTerminals[0];
+            if (gt !is null) {
+                auto p = cast<CSmPlayer>(gt.ControlledPlayer);
+                if (p !is null) {
+                    auto script = cast<CSmScriptPlayer>(p.ScriptAPI);
+                    if (script !is null) {
+                        bool spawned = IsSpawned(cp, gt, p, script);
+                        bool spectator = script.RequestsSpectate;
+                        lastPlayerStatus = spawned ? PlayerStatus::Spawned
+                            : spectator ? PlayerStatus::Unspawned_Spec : PlayerStatus::Unspawned_Player;
+                        UpdatePlayerPosAndCam(HasVectors(script));
+                        return;
+                    }
+                }
+            }
+        }
+        // something was null
+        // ignore the frame.
+        // alternatively: UpdatePPAC_From(socket.s, null, Camera::GetCurrent(), VE_Loc::NearZero, VE_Loc::NearZero);
+    }
 #endif
 
     void UpdatePlayerPosAndCam(HasVectors@ script) {
@@ -493,15 +531,7 @@ class ServerConn {
 #if MP4
                     UpdateMp4_PPAC_InPlayground(app);
 #else
-                    auto cp = cast<CSmArenaClient>(app.CurrentPlayground);
-                    auto gt = cp.GameTerminals[0];
-                    auto p = cast<CSmPlayer>(gt.ControlledPlayer);
-                    auto script = cast<CSmScriptPlayer>(p.ScriptAPI);
-                    bool spawned = IsSpawned(cp, gt, p, script);
-                    bool spectator = script.RequestsSpectate;
-                    lastPlayerStatus = spawned ? PlayerStatus::Spawned
-                        : spectator ? PlayerStatus::Unspawned_Spec : PlayerStatus::Unspawned_Player;
-                    UpdatePlayerPosAndCam(HasVectors(script));
+                    UpdateTm2020_PPAC_InPlayground(app);
 #endif
                     wasNullCtx = false;
                 } catch {
@@ -589,14 +619,15 @@ bool WriteVec3(Net::Socket@ s, float x, float y, float z) {
 
 #if TMNEXT
 bool IsSpawned(CSmArenaClient@ cp, CGameTerminal@ gt, CSmPlayer@ p, CSmScriptPlayer@ script) {
-#if DEV && FALSE && DEPENDENCY_MLFEEDRACEDATA
+#if DEV && DEPENDENCY_MLFEEDRACEDATA
+    // && FALSE
     // return MLFeed::GetRaceData_V4().LocalPlayer.IsSpawned;
 #elif DEPENDENCY_MLFEEDRACEDATA
     auto rd = MLFeed::GetRaceData_V4();
     if (rd !is null) {
         auto lp = rd.LocalPlayer;
         if (lp !is null) {
-            return lp.IsSpawned;
+            return lp.SpawnStatus != MLFeed::SpawnStatus::NotSpawned;
         }
     }
 #endif
@@ -607,7 +638,7 @@ bool IsSpawned(CSmArenaClient@ cp, CGameTerminal@ gt, CSmPlayer@ p, CSmScriptPla
         return false;
     }
     int rulesStartTime = int(cp.Arena.Rules.RulesStateStartTime);
-    if (rulesStartTime < 0 || script.StartTime + 1500 < rulesStartTime) return false;
+    if (rulesStartTime < 0 || script.StartTime < 0) return false;
     // during 3.2.1.go
     if (p.SpawnIndex < 0) return false;
     if (script.Position.LengthSquared() < 0.01) return false;
