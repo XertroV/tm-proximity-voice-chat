@@ -334,16 +334,7 @@ class ServerConn {
             // Turns out, CGamePlaygroundBasic appears for like a frame when switching maps
             // since it's just one frame, we can ignore it
             return;
-            // auto ty = Reflection::TypeOf(app.CurrentPlayground);
-            // NotifyWarning("CP type: " + ty.Name + " | Class ID: " + Text::Format("%08x", ty.ID));
-            // lastPlayerStatus = PlayerStatus::None_NoMap;
-            // UpdatePPAC_From(socket.s, null, Camera::GetCurrent(), VE_Loc::NearZero, VE_Loc::NearZero);
         }
-        // if (cp.GameTerminals) {
-        //     NotifyWarning("GameTerminals null!");
-        //     UpdatePPAC_From(socket.s, null, Camera::GetCurrent(), VE_Loc::NearZero, VE_Loc::NearZero);
-        //     return;
-        // }
         if (cp.GameTerminals.Length > 0) {
             auto gt = cp.GameTerminals[0];
             if (gt !is null) {
