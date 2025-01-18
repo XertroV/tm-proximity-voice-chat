@@ -308,52 +308,6 @@ class ServerConn {
     }
 
 
-    Json::Value posAndCamJ = GenEmptyPosAndCamJ();
-
-    void SendFixedPosAndCam_PointingAway(float x, float y, float z) {
-        auto s = socket.s;
-        VarInt::EncodeUint(s, 73); // 1 + (4 * 3 * 3 * 2) = 73
-        s.Write(uint8(1)); // 1
-        bool success = WriteVec3(s, x, y, z*-1.0)
-            && WriteVec3(s, -ROOT2ON2, 0, ROOT2ON2)
-            && WriteVec3(s, 0, 1, 0)
-            && WriteVec3(s, x, y, z*-1.0)
-            && WriteVec3(s, -ROOT2ON2, 0, ROOT2ON2)
-            && WriteVec3(s, 0, 1, 0);
-        LogSentType("Positions");
-    }
-
-    void SendZeroPlayerPosAndCam() {
-        auto s = socket.s;
-        VarInt::EncodeUint(s, 73); // 1 + (4 * 3 * 3 * 2) = 73
-        s.Write(uint8(1)); // 1
-        // pos
-        s.Write(float(0.01)); // 5
-        s.Write(float(0.01));
-        s.Write(float(0.01));
-        // dir
-        s.Write(float(0));
-        s.Write(float(0));
-        s.Write(float(-1));
-        // up
-        s.Write(float(0));
-        s.Write(float(1));
-        s.Write(float(0));
-        // cpos
-        s.Write(float(0.01));
-        s.Write(float(0.01));
-        s.Write(float(0.01));
-        // cdir
-        s.Write(float(0));
-        s.Write(float(0));
-        s.Write(float(-1));
-        // cup
-        s.Write(float(0));
-        s.Write(float(1));
-        s.Write(float(0));
-        LogSentType("Positions");
-    }
-
     void UpdatePlayerPosAndCam(CSmScriptPlayer@ script) {
         if (script is null) {
             OnUpdatePPAC_NoMap();
@@ -430,11 +384,11 @@ class ServerConn {
                 return PPAC_WritePlayer(s, script);
             case VE_Loc::Camera:
                 return PPAC_WriteMat(s, cam.NextLocation);
-            case VE_Loc::FarAwayZone1: // , -100., -100., 100.);
-            case VE_Loc::FarAwayZone2: // , 100., -100., 100.);
-            case VE_Loc::FarAwayZone3: // , 0, -100., 100.);
-            case VE_Loc::NearZero: // , 0.01, 0.01, 0.01);
-            case VE_Loc::Zero_DisablePositionalAudio: // , 0., 0., 0.);
+            case VE_Loc::FarAwayZone1:
+            case VE_Loc::FarAwayZone2:
+            case VE_Loc::FarAwayZone3:
+            case VE_Loc::NearZero:
+            case VE_Loc::Zero_DisablePositionalAudio:
                 return WriteStaticZone(s, loc);
             default: break;
         }
@@ -445,23 +399,27 @@ class ServerConn {
     bool WriteStaticZone(Net::Socket@ s, VE_Loc loc) {
         switch (loc) {
             case VE_Loc::FarAwayZone1:
-                return WriteVec3(s, -300., -300., 300.);
+                return PPAC_WritePosAndDefs_3xVec3(s, vec3(-300., -300., 300.));
             case VE_Loc::FarAwayZone2:
-                return WriteVec3(s, 300., -300., 300.);
+                return PPAC_WritePosAndDefs_3xVec3(s, vec3(300., -300., 300.));
             case VE_Loc::FarAwayZone3:
-                return WriteVec3(s, 0, -300., 300.);
+                return PPAC_WritePosAndDefs_3xVec3(s, vec3(0, -300., 300.));
             case VE_Loc::NearZero:
-                return WriteVec3(s, 0.01, 0.01, 0.01);
+                return PPAC_WritePosAndDefs_3xVec3(s, vec3(0.005, 0.005, 0.005));
             case VE_Loc::Zero_DisablePositionalAudio:
-                return WriteVec3(s, 0., 0., 0.);
+                return PPAC_WritePosAndDefs_3xVec3(s, vec3(0., 0., 0.));
             default: break;
         }
         throw("Non-static/Unknown VE_Loc: " + tostring(loc));
-        return WriteVec3(s, 0., 0., 0.);
+        return PPAC_WritePosAndDefs_3xVec3(s, vec3(0., 0., 0.));
     }
 
     bool PPAC_WriteDefault_3xVec3(Net::Socket@ s) {
-        return WriteVec3(s, 0.01, 0.01, 0.01)
+        return PPAC_WritePosAndDefs_3xVec3(s, vec3(0.01, 0.01, 0.01));
+    }
+
+    bool PPAC_WritePosAndDefs_3xVec3(Net::Socket@ s, vec3 pos) {
+        return WriteVec3(s, pos.x, pos.y, pos.z)
             && WriteVec3(s, POINTING_AWAY_DIR.x, 0, POINTING_AWAY_DIR.z)
             && WriteVec3(s, 0, 1, 0);
     }
@@ -485,55 +443,6 @@ class ServerConn {
         return VarInt::EncodeUint(s, 73) // 1 + (4 * 3 * 3) * 2 = 73
             && s.Write(uint8(1)); // 1 - version/payload marker (json always starts with `{`)
     }
-
-    // void UpdatePPAC_FromCamOnly() {
-    //     auto cam = Camera::GetCurrent();
-    //     auto mat = cam.NextLocation;
-    //     auto s = socket.s;
-    //     bool success = PPAC_WriteHeader(s)
-    //         && PPAC_WriteMat(s, mat)
-    //         && PPAC_WriteMat(s, mat);
-    //     if (!success) {
-    //         warn("Failed to write to socket");
-    //     }
-    //     LogSentType("Positions");
-    // }
-
-    // // vec3 pos, dir, up, camPos, camDir, camUp;
-    // void UpdatePlayerPosAndCam_FromPlayerAndCamera(CSmScriptPlayer@ script) {
-    //     // todo: VCMode
-
-    //     auto s = socket.s;
-    //     VarInt::EncodeUint(s, 73); // 1 + (4 * 3 * 3 * 2) = 73
-    //     s.Write(uint8(1)); // 1
-    //     // mumble proximity defaults are 1m and 15m so divide pos by 32
-    //     // the server uses left handed coords, but tm uses right handed coords, so flip the z axis
-    //     // s.Write(float(script.Position.x * MUMBLE_SCALE)); // 5
-    //     // s.Write(float(script.Position.y * MUMBLE_SCALE)); // 9
-    //     // s.Write(float(script.Position.z * MUMBLE_SCALE * -1.));  // 13
-    //     // s.Write(float(script.AimDirection.x));  // 17
-    //     // s.Write(float(script.AimDirection.y));  // 21
-    //     // s.Write(float(script.AimDirection.z * -1.));
-    //     // s.Write(float(script.UpDirection.x));
-    //     // s.Write(float(script.UpDirection.y));
-    //     // s.Write(float(script.UpDirection.z * -1.));
-    //     PPAC_WritePlayer(s, script);
-    //     auto cam = Camera::GetCurrent();
-    //     bool success = PPAC_WriteMat(s, cam.NextLocation);
-    //     // s.Write(float(mat.tx * MUMBLE_SCALE));
-    //     // s.Write(float(mat.ty * MUMBLE_SCALE));
-    //     // s.Write(float(mat.tz * MUMBLE_SCALE * -1.));
-    //     // s.Write(float(mat.xz));
-    //     // s.Write(float(mat.yz));
-    //     // s.Write(float(mat.zz * -1.));
-    //     // s.Write(float(mat.xy));
-    //     // s.Write(float(mat.yy));
-    //     // bool success = s.Write(float(mat.zy * -1.));
-    //     if (!success) {
-    //         warn("Failed to write to socket");
-    //     }
-    //     LogSentType("Positions");
-    // }
 
     PlayerStatus lastPlayerStatus = PlayerStatus::None_NoMap;
 
@@ -567,7 +476,10 @@ class ServerConn {
             } else if (!wasNullCtx) {
                 wasNullCtx = true;
                 lastPlayerStatus = PlayerStatus::None_NoMap;
-                SendZeroPlayerPosAndCam();
+                // SendZeroPlayerPosAndCam();
+                UpdatePPAC_From(socket.s, null, Camera::GetCurrent(), VE_Loc::NearZero, VE_Loc::NearZero);
+            } else {
+                UpdatePPAC_From(socket.s, null, Camera::GetCurrent(), VE_Loc::NearZero, VE_Loc::NearZero);
             }
             yield();
         }
@@ -625,44 +537,11 @@ void OnMsg_ShutdownNow(Json::Value@ msg) {
     }
 }
 
-Json::Value GenEmptyPosAndCamJ() {
-    auto j = Json::Object();
-    j["p"] = GenEmptyMPosStructJ();
-    j["c"] = GenEmptyMPosStructJ();
-    return j;
-}
-
-Json::Value GenEmptyMPosStructJ() {
-    auto j = Json::Object();
-    j["pos"] = GenVec3J(0.01, 0.01, 0.01);
-    j["dir"] = GenVec3J(0, 0, 1);
-    j["up"] = GenVec3J(0, 1, 0);
-    return j;
-}
-
-Json::Value GenEmptyVec3J() {
-    auto j = Json::Array();
-    j.Add(0.0);
-    j.Add(0.0);
-    j.Add(0.0);
-    return j;
-}
-
-Json::Value GenVec3J(float x, float y, float z) {
-    auto j = Json::Array();
-    j.Add(x);
-    j.Add(y);
-    j.Add(z);
-    return j;
-}
-
-void SetVec3J(Json::Value@ j, float x, float y, float z) {
-    j[0] = x;
-    j[1] = y;
-    j[2] = z;
-}
+vec3 dbg_lastVec3Written;
 
 bool WriteVec3(Net::Socket@ s, float x, float y, float z) {
+    dbg_lastVec3Written = vec3(x, y, z);
+    // turns out it wasn't jitter that was needed, but just updating the values at all. I guess there's a flag or timestamp or something.
     return s.Write(float(x)) && s.Write(float(y)) && s.Write(float(z));
 }
 
@@ -671,7 +550,13 @@ bool IsSpawned(CSmArenaClient@ cp, CGameTerminal@ gt, CSmPlayer@ p, CSmScriptPla
 #if DEV && DEPENDENCY_MLFEEDRACEDATA
     // return MLFeed::GetRaceData_V4().LocalPlayer.IsSpawned;
 #elif DEPENDENCY_MLFEEDRACEDATA
-    return MLFeed::GetRaceData_V4().LocalPlayer.IsSpawned;
+    auto rd = MLFeed::GetRaceData_V4();
+    if (rd !is null) {
+        auto p = rd.LocalPlayer;
+        if (p !is null) {
+            return p.IsSpawned;
+        }
+    }
 #endif
 
     // playing = 1, finish == 11
