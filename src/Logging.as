@@ -17,3 +17,9 @@ void NotifyWarnOnce(const string &in msg) {
         NotifyWarning(msg);
     }
 }
+
+void DevNotifyWarning(const string &in msg) {
+#if DEV
+    NotifyWarning(msg);
+#endif
+}

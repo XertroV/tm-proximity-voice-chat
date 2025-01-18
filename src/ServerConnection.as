@@ -487,8 +487,8 @@ class ServerConn {
             if (app.CurrentPlayground !is null) {
 #if DEV
 #else
-                try {
 #endif
+                try {
 
 #if MP4
                     UpdateMp4_PPAC_InPlayground(app);
@@ -504,13 +504,14 @@ class ServerConn {
                     UpdatePlayerPosAndCam(HasVectors(script));
 #endif
                     wasNullCtx = false;
-#if DEV
-#else
                 } catch {
-                    dev_warn("Failed to update player pos and cam: " + getExceptionInfo());
+                    // dev_warn("Failed to update player pos and cam: " + getExceptionInfo());
+                    DevNotifyWarning("Failed to update player pos and cam: " + getExceptionInfo());
                     // NotifyWarnOnce("Failed to update player pos and cam: " + getExceptionInfo());
                     lastPlayerStatus = PlayerStatus::None_NoMap;
                 }
+#if DEV
+#else
 #endif
             } else {
                 UpdatePPAC_From(socket.s, null, Camera::GetCurrent(), VE_Loc::NearZero, VE_Loc::NearZero);
