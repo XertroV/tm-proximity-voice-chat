@@ -3,6 +3,8 @@ const string MenuIconColor = "\\$5f8";
 const string PluginIcon = Icons::VolumeControlPhone + Icons::AssistiveListeningSystems;
 const string MenuTitle = MenuIconColor + PluginIcon + "\\$z " + PluginName;
 
+const string LATEST_LINK_APP_VERISON = "1.0.1";
+
 string LocalPlayerInfo_Login, LocalPlayerInfo_Name;
 
 ServerConn@ server;
@@ -134,6 +136,35 @@ void RenderMenuMain() {
         }
 
         if (server !is null) {
+            UI::SeparatorText("Position Settings");
+            UI::Text("Current Player Status: " + tostring(server.lastPlayerStatus));
+            if (server.lastPlayerStatus == PlayerStatus::Spawned) {
+                S_Spawned_VoiceLoc = UI_VE_MenuSelectable("Set Voice Location", S_Spawned_VoiceLoc);
+                S_Spawned_EarsLoc = UI_VE_MenuSelectable("Set Ears Location", S_Spawned_EarsLoc);
+                auto setBoth = UI_VE_MenuSelectable("Set Both", S_Spawned_EarsLoc == S_Spawned_VoiceLoc ? S_Spawned_EarsLoc : VE_Loc::None_Uninitialized);
+                if (setBoth != VE_Loc::None_Uninitialized) {
+                    S_Spawned_VoiceLoc = S_Spawned_EarsLoc = setBoth;
+                }
+                if (UI::Button("Reset##spwanwed")) {
+                    S_Spawned_VoiceLoc = VE_Loc::Player;
+                    S_Spawned_EarsLoc = VE_Loc::Camera;
+                }
+            } else if (server.lastPlayerStatus == PlayerStatus::Unspawned_Player) {
+                S_Unspawned_VoiceLoc = UI_VE_MenuSelectable("Set Voice Location", S_Unspawned_VoiceLoc);
+                S_Unspawned_EarsLoc = UI_VE_MenuSelectable("Set Ears Location", S_Unspawned_EarsLoc);
+                auto setBoth = UI_VE_MenuSelectable("Set Both", S_Unspawned_EarsLoc == S_Unspawned_VoiceLoc ? S_Unspawned_EarsLoc : VE_Loc::None_Uninitialized);
+                if (setBoth != VE_Loc::None_Uninitialized) {
+                    S_Unspawned_VoiceLoc = S_Unspawned_EarsLoc = setBoth;
+                }
+            } else if (server.lastPlayerStatus == PlayerStatus::Unspawned_Spec) {
+                S_Spec_VoiceLoc = UI_VE_MenuSelectable("Set Voice Location", S_Spec_VoiceLoc);
+                S_Spec_EarsLoc = UI_VE_MenuSelectable("Set Ears Location", S_Spec_EarsLoc);
+                auto setBoth = UI_VE_MenuSelectable("Set Both", S_Spec_EarsLoc == S_Spec_VoiceLoc ? S_Spec_EarsLoc : VE_Loc::None_Uninitialized);
+                if (setBoth != VE_Loc::None_Uninitialized) {
+                    S_Spec_VoiceLoc = S_Spec_EarsLoc = setBoth;
+                }
+            }
+
             UI::SeparatorText("Controls");
 
             UI::BeginDisabled(server.IsShutdownClosedOrDC);

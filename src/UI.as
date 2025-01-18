@@ -184,6 +184,10 @@ void Notify(const string &in msg, uint timeout = 5000) {
 	trace("Notified: " + msg);
 }
 void NotifyWarning(const string &in msg) {
-    warn(msg);
+    warn("Notified: " + msg);
     UI::ShowNotification(Meta::ExecutingPlugin().Name + ": Warning", msg, vec4(.9, .6, .2, .3), 10000);
+}
+void NotifySuccess(const string &in msg, uint timeout = 10000) {
+	print("Notified: " + msg.Replace("\n", "\\n"));
+	UI::ShowNotification(Meta::ExecutingPlugin().Name + ": Success", msg, vec4(.1, .5, .1, .3), timeout);
 }

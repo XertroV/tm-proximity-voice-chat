@@ -78,7 +78,7 @@ namespace Wizard {
     int openTab = -1;
 
     int GetTabFs(uint tabIx) {
-        return tabIx == setTab ? selectedTabFlags : 0;
+        return int(tabIx) == setTab ? selectedTabFlags : 0;
     }
 
     int _currTabIx = -1;
@@ -95,7 +95,7 @@ namespace Wizard {
     // }
 
     bool _BeginTabItem(const string &in name) {
-        if (progress < _currTabIx) return false;
+        if (int(progress) < _currTabIx) return false;
         auto r = UI::BeginTabItem(name, GetTabFs(_currTabIx));
         if (setTab == _currTabIx) setTab = -1;
         if (r) openTab = _currTabIx;
@@ -299,7 +299,7 @@ namespace Wizard {
     }
 
     void Next() {
-        if (openTab == progress) {
+        if (openTab == int(progress)) {
             progress++;
             setTab = progress;
         } else {
