@@ -256,8 +256,7 @@ namespace Wizard {
         UI::Dummy(vec2(20, 0));
         UI::SameLine();
         if (UI::ButtonColored(Icons::Download + " Open Link App Download Page", .42, .6, .4)) {
-            Notify("Sorry link isn't added yet.");
-            // OpenBrowserURL("https://openplanet.dev/files/97")
+            OpenBrowserURL("https://openplanet.dev/file/122");
         }
         UI::SameLine();
         // does not work w/ align to frame padding; also is rather dark blue.
