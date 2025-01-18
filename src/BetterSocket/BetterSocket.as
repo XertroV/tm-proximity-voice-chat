@@ -43,11 +43,12 @@ class BetterSocket {
         } else {
             @s = socket;
             auto timeout = Time::Now + TIMEOUT_CONNECT;
-            while (s !is null && !s.IsReady() && Time::Now < timeout) yield();
+            while (s !is null && !s.IsReady() && !s.IsHungUp() && Time::Now < timeout) yield();
             if (s is null) return;
-            if (!s.IsReady()) {
-                warn("Failed to connect to " + addr + ":" + port + " in time");
-                startnew(CoroutineFunc(StartConnect));
+            if (!s.IsReady() || s.IsHungUp()) {
+                trace("Failed to connect to " + addr + ":" + port + " in time. Current remote IP: " + s.GetRemoteIP());
+            } else {
+                dev_trace("Connected to " + s.GetRemoteIP());
             }
         }
         IsConnecting = false;
@@ -66,7 +67,7 @@ class BetterSocket {
     }
 
     bool get_IsUnclosed() {
-        return s !is null && !s.IsHungUp();
+        return s !is null && !s.IsHungUp() && s.IsReady();
     }
 
     protected bool hasWaitingAvailable = false;

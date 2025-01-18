@@ -30,6 +30,10 @@ class ServerConn {
         while (!_isShutdown && socket.IsConnecting && Time::Now - connStart < 5000) yield();
         sleep(21230);
         while (!_isShutdown) {
+            if (server !is this) {
+                Shutdown();
+                return;
+            }
             if (socket.IsConnecting) {
                 connStart = Time::Now;
                 while (!_isShutdown && socket.IsConnecting && Time::Now - connStart < 5000) yield();
@@ -66,18 +70,38 @@ class ServerConn {
     }
 
     bool get_IsShutdownClosedOrDC() {
-        return _isShutdown || socket.IsClosed || socket.ServerDisconnected;
+        return socket is null || _isShutdown || socket.IsClosed || socket.ServerDisconnected;
     }
 
+    bool get_IsConnecting() {
+        return socket !is null && socket.IsConnecting;
+    }
+
+    int connectFailureCount = 0;
 
     protected void ReconnectSocket() {
         NewRunNonce();
         auto nonce = runNonce;
         IsReady = false;
-        trace("ReconnectSocket");
+        dev_trace("ReconnectSocket");
         if (_isShutdown) return;
-        socket.ReconnectToServer();
-        startnew(CoroutineFuncUserdataUint64(BeginLoop), nonce);
+        if (socket.ReconnectToServer()) {
+            startnew(CoroutineFuncUserdataUint64(BeginLoop), nonce);
+            connectFailureCount = 0;
+        } else {
+            connectFailureCount++;
+            dev_warn("[DEV] Failed to connect to server.");
+            int sleepSec = 5 * connectFailureCount;
+            trace("Failed to reconnect to server " + connectFailureCount + " time, sleeping " + sleepSec + " sec then retry.");
+            if (connectFailureCount > 5) {
+                NotifyWarning("Failed to connect to server after " + connectFailureCount + " attempts. Shutting down. Please re-connect Proximity VC when you have the TM to Mumble Link app running.");
+                Shutdown();
+                return;
+            }
+            sleep(sleepSec * 1000);
+            if (IsBadNonce(nonce)) return;
+            startnew(CoroutineFunc(ReconnectSocket));
+        }
     }
 
     bool IsBadNonce(uint32 nonce) {
@@ -99,9 +123,7 @@ class ServerConn {
             ReconnectSocket();
             return;
         }
-        print("Connected to server...");
-        uint ctxStartTime = Time::Now;
-        print("... server connection ready");
+        dev_trace("Connected to server... setting ServerConnection::IsReady = true;");
         IsReady = true;
         QueueMsg(GetPlayerDetailsMsg());
         QueueMsg(GetServerDetailsMsg());
@@ -111,6 +133,7 @@ class ServerConn {
         startnew(CoroutineFuncUserdataUint64(ReconnectWhenDisconnected), nonce);
         startnew(CoroutineFuncUserdataUint64(WatchForServerChange), nonce);
         startnew(CoroutineFuncUserdataUint64(WatchPosAndCam), nonce);
+        Notify("Connected to Link app.");
     }
 
     void ReconnectWhenDisconnected(uint64 nonce) {
@@ -238,7 +261,7 @@ class ServerConn {
             if (IsBadNonce(nonce)) return;
             QueueMsg(PingMsg());
             yield(2);
-            if (Time::Now - lastPingTime > PING_PERIOD + 1000 && IsReady) {
+            if (Time::Now - lastPingTime > PING_PERIOD + 2000 && IsReady) {
                 if (IsBadNonce(nonce)) return;
                 pingTimeoutCount++;
                 if (pingTimeoutCount > 3) {

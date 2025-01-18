@@ -91,6 +91,6 @@ string base63Encode(MemoryBuffer@ buf) {
         ret[ix++] = BASE63[val % 63];
     }
     ret = ret.SubStr(0, ix);
-    print("base63Encode: " + ret + " (" + size + " -> " + ret.Length + ")");
+    // print("base63Encode: " + ret + " (" + size + " -> " + ret.Length + ")");
     return ret;
 }

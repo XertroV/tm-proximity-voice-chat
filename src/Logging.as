@@ -1,11 +1,11 @@
 void dev_trace(const string &in msg) {
 #if DEV
-    trace(msg);
+    trace("[DEVTRACE] " + msg);
 #endif
 }
 
 void dev_warn(const string &in msg) {
 #if DEV
-    warn(msg);
+    warn("[DEV] " + msg);
 #endif
 }

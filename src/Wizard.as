@@ -1,11 +1,15 @@
 const string EM_DASH = "–";
 const string WIZARD_TITLE = MenuTitle + " \\$z\\$i"+EM_DASH+" Wizard";
 
-[Setting category="Wizard" name="Show Wizard"]
+[Setting category="Wizard" name="Hide the Wizard" description="Hides the wizard till later. Only used when Show Wizard is true, meaning the wizard hasn't been done yet."]
+bool WizardLater = false;
+
+[Setting category="Wizard" name="Show Wizard" description="Show the setup wizard for setting up the plugin. This should only be false after the wizard has been completed."]
 bool S_ShowWizard = true;
 
 void Render() {
     if (!S_ShowWizard) return;
+    if (WizardLater) return;
     if (UI::Begin(WIZARD_TITLE, S_ShowWizard, UI::WindowFlags::NoTitleBar | UI::WindowFlags::AlwaysAutoResize | UI::WindowFlags::NoCollapse)) {
         Wizard::DrawTabs();
     }
@@ -16,6 +20,9 @@ UI::Texture@ _texAddServer = null;
 UI::Texture@ _texInLobby = null;
 UI::Texture@ _texInChannel = null;
 UI::Texture@ _texLink = null;
+UI::Texture@ _texMumblePluginSettings = null;
+UI::Texture@ _texMumblePosAudioSettings = null;
+UI::Texture@ _texPluginMenu = null;
 
 UI::Texture@ get_texAddServer() {
     if (_texAddServer is null) {
@@ -41,11 +48,34 @@ UI::Texture@ get_texLink() {
     }
     return _texLink;
 }
+UI::Texture@ get_texMumblePluginSettings() {
+    if (_texMumblePluginSettings is null) {
+        @_texMumblePluginSettings = UI::LoadTexture("img/MumblePluginSettings.png");
+    }
+    return _texMumblePluginSettings;
+}
+UI::Texture@ get_texMumblePosAudioSettings() {
+    if (_texMumblePosAudioSettings is null) {
+        @_texMumblePosAudioSettings = UI::LoadTexture("img/MumblePosAudioSettings.png");
+    }
+    return _texMumblePosAudioSettings;
+}
+UI::Texture@ get_texPluginMenu() {
+    if (_texPluginMenu is null) {
+        @_texPluginMenu = UI::LoadTexture("img/MainMenuMenu.png");
+    }
+    return _texPluginMenu;
+}
+
+
+funcdef UI::Texture@ TexGetter();
+
 
 namespace Wizard {
     uint progress = 0;
     int setTab = -1;
     int selectedTabFlags = UI::TabItemFlags::SetSelected;
+    int openTab = -1;
 
     int GetTabFs(uint tabIx) {
         return tabIx == setTab ? selectedTabFlags : 0;
@@ -53,8 +83,11 @@ namespace Wizard {
 
     int _currTabIx = -1;
     void _BeginTabBar() {
+        // UI::Text("openTab: " + openTab + ", progress: " + progress + ", setTab: " + setTab + ", _currTabIx: " + _currTabIx);
+        Heading("Proximity VC Setup Wizard");
         UI::BeginTabBar("WizardTabs");
         _currTabIx = 0;
+        openTab = -1;
     }
 
     // void _EndTabBar() {
@@ -65,6 +98,7 @@ namespace Wizard {
         if (progress < _currTabIx) return false;
         auto r = UI::BeginTabItem(name, GetTabFs(_currTabIx));
         if (setTab == _currTabIx) setTab = -1;
+        if (r) openTab = _currTabIx;
         _currTabIx++;
         return r;
     }
@@ -100,30 +134,51 @@ namespace Wizard {
         UI::EndTabBar();
     }
 
+    const string MUMBLE_SETTINGS_COL_COG = "\\$f80 " + Icons::Cogs;
+
     void DT_Mumble_Settings() {
         SubHeading("Mumble Settings");
+
+        UI::SeparatorText("");
+        UI::Text(WarnTriangle + " If you don't have Mumble installed, do that now.");
+        // UI::SameLine();
+        if (UI::ButtonColored(Icons::Download + " Download Mumble", .56, .6, .6)) {
+            OpenBrowserURL("https://www.mumble.info/downloads/");
+        }
+        UI::SeparatorText("");
 
         UI::AlignTextToFramePadding();
         UI::Text("Open Mumble settings.");
 
-        UI::SeparatorText("Audio Output > Positional Audio");
+        SeparatorText_Bold(MUMBLE_SETTINGS_COL_COG + " Settings > Audio Output > Positional Audio");
+        UI::AlignTextToFramePadding(); UI::Text("(( " + Icons::HandPointerO + " ))"); UI::SameLine();
+        UI_Padded_PillSm_Info("  " + Icons::PictureO + " Positional Audio Settings");
+        AddImageTooltip(get_texMumblePosAudioSettings);
+
         // Positional Audio: Enable: true, Headphones: ??, Min Dist: 1.0; Max Dist: 15.0; Min Vol: 0%.
         UI::AlignTextToFramePadding();
         UI::Text("Set these Positional Audio Settings");
         UI::Indent(6.);
         Col2Text("Enable", IconFromBool(true));
-        Col2Text("Headphones", "??");
+        Col2Text("Headphones", "?? (are you wearing headphones?)");
         Col2Text("Min Distance", "1.0", true);
         Col2Text("Max Distance", "15.0", true);
         Col2Text("Min Volume", "0.0", true);
         Col2Text("Bloom", "50 %", true, "50");
         UI::Unindent(6.);
 
-        UI::SeparatorText("Plugins");
+
+        SeparatorText_Bold(MUMBLE_SETTINGS_COL_COG + " Settings > Plugins");
+        UI::AlignTextToFramePadding(); UI::Text("(( " + Icons::HandPointerO + " ))"); UI::SameLine();
+        UI_Padded_PillSm_Info("  " + Icons::PictureO + " Plugin Settings");
+        AddImageTooltip(get_texMumblePluginSettings);
+
         UI::AlignTextToFramePadding();
         UI::Text("Enable: \"\\$<\\$af4\\$iLink to Game and Transmit Position\\$>\" near the top.");
         UI::AlignTextToFramePadding();
         UI::TextWrapped("Under \\$<\\$af4\\$iPlugins\\$> subsection, find the \\$<\\$af4\\$iLink\\$> plugin and check the \\$<\\$af4\\$iEnable\\$> checkbox.");
+
+
         UI::SeparatorText("");
         UI::AlignTextToFramePadding();
         UI::Text(InfoTriangle + " Click OK now to save settings.");
@@ -132,7 +187,17 @@ namespace Wizard {
         UI::Text("\t\t\t" + Icons::CheckSquareO + " Enabled Link Plugin in Mumble Settings");
         UI::SeparatorText("");
         if (BigGreenButton("Next " + Icons::ArrowRight)) Next();
+        if (BigRedButton(Icons::Times + " Complete this later")) WizardLater = true;
+    }
 
+    void AddImageTooltip(TexGetter@ tex) {
+        if (UI::IsItemHovered()) {
+            UI::BeginTooltip();
+            if (tex() !is null) {
+                UI::Image(tex());
+            }
+            UI::EndTooltip();
+        }
     }
 
     // About setting up mumble
@@ -165,7 +230,9 @@ namespace Wizard {
     void DT_Mumble_2() {
         SubHeading("How Channels Work");
         UI::SeparatorText("");
-        UI::TextWrapped("You are automatically moved into the right channel depending on your current server/map.");
+        UI::TextWrapped("You are \\$<\\$iautomatically\\$> moved into the right channel depending on your current server/map.");
+        UI::Text("\\$i\\$999Contact XertroV for bug reports or custom behavior requests.");
+        UI::TextWrapped(WarnTriangle + " \\$f80You cannot join channels for other maps / servers.");
         UI::TextWrapped(InfoTriangle + " Optional Setting: manual team name.");
         UI::TextWrapped(InfoTriangle + " Optional Setting: always join map VC instead of server.");
         UI::SeparatorText("\\$iMumble when not in a map");
@@ -192,39 +259,59 @@ namespace Wizard {
             Notify("Sorry link isn't added yet.");
             // OpenBrowserURL("https://openplanet.dev/files/97")
         }
+        UI::SameLine();
+        // does not work w/ align to frame padding; also is rather dark blue.
+        // UI::TextLinkOpenURL(Icons::Git + " Source Code", "https://github.com/xertrov/tm-mumble-bridge");
+        if (UI::ButtonColored(Icons::Git + " Source Code", .64, .3, .5)) {
+            OpenBrowserURL("https://github.com/xertrov/tm-mumble-bridge");
+        }
         UI::AlignTextToFramePadding();
         UI::TextWrapped("It will automatically relay your position and map/server data.");
         UI::AlignTextToFramePadding();
-        UI::TextWrapped("Just leave it running in the background.");
+        UI::TextWrapped("Just leave it running in the background. If mumble needs restarting, then restart the link app, too.");
         UI::SeparatorText("");
         if (texLink !is null)
             UI_Image_Padded(texLink);
+        UI_PaddedAlert_Pill(Icons::QuestionCircleO + " An error message about `cannot find the file specified. (os error 2)` means that it could not connect to Mumble.", vec4(.0, .35, .7, .7));
         UI::SeparatorText("");
-        if (BigGreenButton("Next " + Icons::ArrowRight)) Next();
+        if (BigGreenButton("TM to Mumble Link is Running & Connected " + Icons::ArrowRight)) Next();
     }
 
     // About the plugin
     void DT_Plugin() {
         SubHeading("This Plugin");
         UI::SeparatorText("");
-        UI::Text("Stuff about the plugin");
-        UI::Text("Menubar");
+        UI::TextWrapped("When enabled, the plugin will try to connect to the Link app automatically.");
+        UI::TextWrapped("You can see the current status and manually disconnect/reconnect via the Menu (only shows when plugin is enabled and on).");
         UI::SeparatorText("");
-        S_Enabled = UI::Checkbox("Enable Proximity VC Now", S_Enabled);
+        UI_Image_Padded(texPluginMenu);
+        UI::SeparatorText("");
+        // UI::Text("Menubar");
+        S_Enabled = UI::Checkbox("\\$<\\$8bf" + Icons::QuestionCircleO + "\\$> Enable Proximity VC Now", S_Enabled);
+        if (!S_Enabled) {
+            UI_Padded_PillSm_Info("Enable it later via Plugins menu.", true);
+        }
+
         UI::SeparatorText("");
         if (BigGreenButton("Finish " + Icons::Check)) {
             S_ShowWizard = false;
+            OnEnabledUpdated();
         }
     }
 
     void Next() {
-        progress++;
-        setTab = progress;
+        if (openTab == progress) {
+            progress++;
+            setTab = progress;
+        } else {
+            setTab = _currTabIx;
+        }
     }
 }
 
 
 const string InfoTriangle = "\\$<\\$4f4" + Icons::ExclamationTriangle + "\\$>";
+const string WarnTriangle = "\\$<\\$f80" + Icons::ExclamationTriangle + "\\$>";
 
 
 /*
