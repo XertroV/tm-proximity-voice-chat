@@ -308,8 +308,30 @@ class ServerConn {
     }
 
 
-    void UpdatePlayerPosAndCam(CSmScriptPlayer@ script) {
+#if MP4
+    void UpdateMp4_PPAC_InPlayground(CGameCtnApp@ app) {
+        auto cp = cast<CTrackManiaRaceNew>(app.CurrentPlayground);
+        if (cp is null) {
+            // todo: not in TM2?
+            throw("Not in TM2?");
+            UpdatePPAC_From(socket.s, null, Camera::GetCurrent(), VE_Loc::NearZero, VE_Loc::NearZero);
+            return;
+        }
+        // auto gt = cast<CTrackManiaGameTerminal>(cp.GameTerminals[0]);
+        auto gt = cp.GameTerminals[0];
+        auto p = cast<CTrackManiaPlayer>(gt.ControlledPlayer);
+        auto script = cast<CTrackManiaScriptPlayer>(p.ScriptAPI);
+        CSceneVehicleVisState@ vis = VehicleState::GetVis(app.GameScene, p);
+        bool isSpec = script.RequestsSpectate;
+        lastPlayerStatus = IsSpawned(cp, gt, p, script) ? PlayerStatus::Spawned : isSpec ? PlayerStatus::Unspawned_Spec : PlayerStatus::Unspawned_Player;
+        UpdatePlayerPosAndCam(HasVectors(vis));
+        // trace("UpdateMp4_PPAC_InPlayground, vis.Pos: " + vis.Position.ToString());
+    }
+#endif
+
+    void UpdatePlayerPosAndCam(HasVectors@ script) {
         if (script is null) {
+            warn("script is null");
             OnUpdatePPAC_NoMap();
             return;
         }
@@ -333,41 +355,37 @@ class ServerConn {
         // no settings for this
         // SendZeroPlayerPosAndCam();
         UpdatePPAC_From(socket.s, null, Camera::GetCurrent(), VE_Loc::NearZero, VE_Loc::NearZero);
-        // auto s = socket.s;
-        // auto success = PPAC_WriteHeader(s)
-        //     && PPAC_WriteDefault_3xVec3(s)
-        //     && PPAC_WriteDefault_3xVec3(s);
-        // if (!success) warn("OnUpdatePPAC_NoMap Failed to write to socket");
-        // LogSentType("Positions");
+        // dev_warn("OnUpdatePPAC_NoMap: " + tostring(VE_Loc::NearZero));
     }
 
-    void OnUpdatePPAC_UnspawnedPlayer(CSmScriptPlayer@ script) {
+    void OnUpdatePPAC_UnspawnedPlayer(HasVectors@ script) {
         VE_Loc vl = VE_Loc_OrDefault(S_Unspawned_VoiceLoc, VE_Loc::Camera);
         VE_Loc el = VE_Loc_OrDefault(S_Unspawned_EarsLoc, VE_Loc::Camera);
         // todo: apply settings preference
         // todo: apply rules preference
         UpdatePPAC_From(socket.s, script, Camera::GetCurrent(), vl, el);
-        // UpdatePPAC_FromCamOnly();
+        // dev_warn("OnUpdatePPAC_UnspawnedPlayer: " + tostring(vl));
     }
 
-    void OnUpdatePPAC_UnspawnedSpec(CSmScriptPlayer@ script) {
+    void OnUpdatePPAC_UnspawnedSpec(HasVectors@ script) {
         VE_Loc vl = VE_Loc_OrDefault(S_Spec_VoiceLoc, VE_Loc::Camera);
         VE_Loc el = VE_Loc_OrDefault(S_Spec_EarsLoc, VE_Loc::Camera);
         // todo: apply settings preference
         // todo: apply rules preference
         UpdatePPAC_From(socket.s, script, Camera::GetCurrent(), vl, el);
-        // UpdatePPAC_FromCamOnly();
+        // dev_warn("OnUpdatePPAC_UnspawnedSpec: " + tostring(vl));
     }
 
-    void OnUpdatePPAC_Spawned(CSmScriptPlayer@ script) {
+    void OnUpdatePPAC_Spawned(HasVectors@ script) {
         VE_Loc vl = VE_Loc_OrDefault(S_Spawned_VoiceLoc, VE_Loc::Player);
         VE_Loc el = VE_Loc_OrDefault(S_Spawned_EarsLoc, VE_Loc::Camera);
         // todo: apply settings preference
         // todo: apply rules preference
         UpdatePPAC_From(socket.s, script, Camera::GetCurrent(), vl, el);
+        // dev_warn("OnUpdatePPAC_Spawned: " + tostring(vl) + " | " + script.Pos.ToString());
     }
 
-    bool UpdatePPAC_From(Net::Socket@ s, CSmScriptPlayer@ script, CHmsCamera@ cam, VE_Loc voiceLoc, VE_Loc earsLoc) {
+    bool UpdatePPAC_From(Net::Socket@ s, HasVectors@ script, CHmsCamera@ cam, VE_Loc voiceLoc, VE_Loc earsLoc) {
         bool success = PPAC_WriteHeader(s)
             && PPAC_WriteZone(s, script, cam, voiceLoc)
             && PPAC_WriteZone(s, script, cam, earsLoc);
@@ -378,12 +396,12 @@ class ServerConn {
         return success;
     }
 
-    bool PPAC_WriteZone(Net::Socket@ s, CSmScriptPlayer@ script, CHmsCamera@ cam, VE_Loc loc) {
+    bool PPAC_WriteZone(Net::Socket@ s, HasVectors@ script, CHmsCamera@ cam, VE_Loc loc) {
         switch (loc) {
             case VE_Loc::Player:
                 return PPAC_WritePlayer(s, script);
             case VE_Loc::Camera:
-                return PPAC_WriteMat(s, cam.NextLocation);
+                return PPAC_WriteMat(s, cam is null ? iso4(mat4::Identity()) : cam.NextLocation);
             case VE_Loc::FarAwayZone1:
             case VE_Loc::FarAwayZone2:
             case VE_Loc::FarAwayZone3:
@@ -430,13 +448,26 @@ class ServerConn {
             && WriteVec3(s, m.xy, m.yy, m.zy * -1.);
     }
 
-    bool PPAC_WritePlayer(Net::Socket@ s, CSmScriptPlayer@ script) {
+    bool PPAC_WritePlayer(Net::Socket@ s, HasVectors@ script) {
         if (script is null) {
             return WriteStaticZone(s, VE_Loc::NearZero);
         }
-        return WriteVec3(s, script.Position.x * MUMBLE_SCALE, script.Position.y * MUMBLE_SCALE, script.Position.z * MUMBLE_SCALE * -1.)
-            && WriteVec3(s, script.AimDirection.x, script.AimDirection.y, script.AimDirection.z * -1.)
-            && WriteVec3(s, script.UpDirection.x, script.UpDirection.y, script.UpDirection.z * -1.);
+        vec3 up = script.Up;
+        vec3 pos = script.Pos;
+        vec3 dir = script.Dir;
+// #if TMNEXT
+//         up = script.UpDirection;
+// #else
+//         if (script.Vehicle !is null) {
+//             up = script.Vehicle.Up;
+//         } else {
+//             up = vec3(0, 1, 0);
+//         }
+// #endif
+        up.z *= -1.;
+        return WriteVec3(s, pos.x * MUMBLE_SCALE, pos.y * MUMBLE_SCALE, pos.z * MUMBLE_SCALE * -1.)
+            && WriteVec3(s, dir.x, dir.y, dir.z * -1.)
+            && WriteVec3(s, up.x, up.y, up.z);
     }
 
     bool PPAC_WriteHeader(Net::Socket@ s) {
@@ -454,7 +485,14 @@ class ServerConn {
                 return;
             }
             if (app.CurrentPlayground !is null) {
+#if DEV
+#else
                 try {
+#endif
+
+#if MP4
+                    UpdateMp4_PPAC_InPlayground(app);
+#else
                     auto cp = cast<CSmArenaClient>(app.CurrentPlayground);
                     auto gt = cp.GameTerminals[0];
                     auto p = cast<CSmPlayer>(gt.ControlledPlayer);
@@ -463,23 +501,22 @@ class ServerConn {
                     bool spectator = script.RequestsSpectate;
                     lastPlayerStatus = spawned ? PlayerStatus::Spawned
                         : spectator ? PlayerStatus::Unspawned_Spec : PlayerStatus::Unspawned_Player;
-                    UpdatePlayerPosAndCam(script);
-                    // if (spawned) {
-                    // } else {
-                    //     SendFixedPosAndCam_PointingAway(-100., -100., -100.);
-                    // }
+                    UpdatePlayerPosAndCam(HasVectors(script));
+#endif
                     wasNullCtx = false;
+#if DEV
+#else
                 } catch {
                     dev_warn("Failed to update player pos and cam: " + getExceptionInfo());
                     lastPlayerStatus = PlayerStatus::None_NoMap;
                 }
-            } else if (!wasNullCtx) {
-                wasNullCtx = true;
-                lastPlayerStatus = PlayerStatus::None_NoMap;
-                // SendZeroPlayerPosAndCam();
-                UpdatePPAC_From(socket.s, null, Camera::GetCurrent(), VE_Loc::NearZero, VE_Loc::NearZero);
+#endif
             } else {
                 UpdatePPAC_From(socket.s, null, Camera::GetCurrent(), VE_Loc::NearZero, VE_Loc::NearZero);
+                if (!wasNullCtx) {
+                    wasNullCtx = true;
+                    lastPlayerStatus = PlayerStatus::None_NoMap;
+                }
             }
             yield();
         }
@@ -540,21 +577,24 @@ void OnMsg_ShutdownNow(Json::Value@ msg) {
 vec3 dbg_lastVec3Written;
 
 bool WriteVec3(Net::Socket@ s, float x, float y, float z) {
+#if DEV
     dbg_lastVec3Written = vec3(x, y, z);
+#endif
     // turns out it wasn't jitter that was needed, but just updating the values at all. I guess there's a flag or timestamp or something.
     return s.Write(float(x)) && s.Write(float(y)) && s.Write(float(z));
 }
 
 
+#if TMNEXT
 bool IsSpawned(CSmArenaClient@ cp, CGameTerminal@ gt, CSmPlayer@ p, CSmScriptPlayer@ script) {
-#if DEV && DEPENDENCY_MLFEEDRACEDATA
+#if DEV && FALSE && DEPENDENCY_MLFEEDRACEDATA
     // return MLFeed::GetRaceData_V4().LocalPlayer.IsSpawned;
 #elif DEPENDENCY_MLFEEDRACEDATA
     auto rd = MLFeed::GetRaceData_V4();
     if (rd !is null) {
-        auto p = rd.LocalPlayer;
-        if (p !is null) {
-            return p.IsSpawned;
+        auto lp = rd.LocalPlayer;
+        if (lp !is null) {
+            return lp.IsSpawned;
         }
     }
 #endif
@@ -572,3 +612,47 @@ bool IsSpawned(CSmArenaClient@ cp, CGameTerminal@ gt, CSmPlayer@ p, CSmScriptPla
     // Post = Char before we start racing
     return int(script.Post) == 2 || (script.StartTime > 0 && script.StartTime > int(GetApp().Network.PlaygroundInterfaceScriptHandler.GameTime));
 }
+#elif MP4
+bool IsSpawned(CTrackManiaRaceNew@ cp, CGameTerminal@ gt, CTrackManiaPlayer@ p, CTrackManiaScriptPlayer@ script) {
+    if (p is null) return false;
+    bool raceStateSpawned = p.RaceState == CTrackManiaPlayer::ERaceState::BeforeStart
+            || p.RaceState == CTrackManiaPlayer::ERaceState::Running;
+    // return false when Finished to avoid
+    return script.IsSpawned && raceStateSpawned;
+}
+#endif
+
+
+#if MP4
+class HasVectors {
+    CSceneVehicleVisState@ vis;
+    HasVectors(CSceneVehicleVisState@ vis) {
+        @this.vis = vis;
+    }
+    vec3 get_Pos() {
+        return vis.Position;
+    }
+    vec3 get_Dir() {
+        return vis.Dir;
+    }
+    vec3 get_Up() {
+        return vis.Up;
+    }
+}
+#elif TMNEXT
+class HasVectors {
+    CSmScriptPlayer@ script;
+    HasVectors(CSmScriptPlayer@ script) {
+        @this.script = script;
+    }
+    vec3 get_Pos() {
+        return script.Position;
+    }
+    vec3 get_Dir() {
+        return script.AimDirection;
+    }
+    vec3 get_Up() {
+        return script.UpDirection;
+    }
+}
+#endif

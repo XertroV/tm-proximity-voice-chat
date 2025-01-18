@@ -59,9 +59,11 @@ for pluginSrc in ${pluginSources[@]}; do
   # RELEASE_NAME=$PLUGIN_NAME-$PLUGIN_VERSION.op
   RELEASE_NAME=$PLUGIN_NAME.op
   PLUGIN_FOLDER_NAME=$PLUGIN_NAME
-  PLUGINS_DIR=${PLUGINS_DIR:-$HOME/win/OpenplanetNext/Plugins}
+  OP_DIR_NAME=${OP_DIR_NAME:-OpenplanetNext}
+  PLUGINS_DIR=${PLUGINS_DIR:-$HOME/win/${OP_DIR_NAME}/Plugins}
   PLUGIN_DEV_LOC=$PLUGINS_DIR/$PLUGIN_NAME
   PLUGIN_RELEASE_LOC=$PLUGINS_DIR/$RELEASE_NAME
+  RUN_REMOTE_RELOAD=${RUN_REMOTE_RELOAD:-true}
 
   function buildPlugin {
     # 7z a ./$BUILD_NAME ./fonts ./$pluginSrc/* ./LICENSE ./README.md
@@ -126,7 +128,10 @@ for pluginSrc in ${pluginSources[@]}; do
     case $_build_mode in
       dev|prerelease|unittest)
         # trigger remote build
-        tm-remote-build load folder "$PLUGIN_FOLDER_NAME" --host 172.18.16.1 --port 30000 -v -d "$HOME/OpenplanetNext/"
+        if [[ "$RUN_REMOTE_RELOAD" == "true" ]]; then
+          echo "Running remote build..."
+          tm-remote-build load folder "$PLUGIN_FOLDER_NAME" --host 172.18.16.1 --port 30000 -v -d "$HOME/OpenplanetNext/"
+        fi
         ;;
     esac
     _colortext16 green "✅ Release file: ${RELEASE_NAME}"

@@ -11,13 +11,38 @@ ServerConn@ server;
 
 void Main() {
     auto app = GetApp();
+#if TMNEXT
     LocalPlayerInfo_Login = app.LocalPlayerInfo.Login;
     LocalPlayerInfo_Name = app.LocalPlayerInfo.Name;
-    if (Time::Now < 90000) {
-        WaitForStableFrameRateBeforeConnectingSocket();
+    warn("TM NExt");
+#else
+    // works for mp4, not sure about turbo
+    auto net = cast<CTrackManiaNetwork>(app.Network);
+    while (net is null) {
+        warn("Network is null, waiting for it to be initialized...");
+        startnew(ThrowBecause, "network is null");
+        sleep(1000);
+        @net = cast<CTrackManiaNetwork>(app.Network);
     }
+
+    while (net.PlayerInfo.Login == "00000000") yield();
+    print("PlayerInfo.Login: " + net.PlayerInfo.Login);
+    print("PlayerInfo.Name: " + net.PlayerInfo.Name);
+
+    LocalPlayerInfo_Login = net.PlayerInfo.Login;
+    LocalPlayerInfo_Name = net.PlayerInfo.Name;
+#endif
+
+    // in case of heavy operations (like we started TM recently, restarted script engine), wait for the frame rate to stabilize before connecting sockets to avoid timeout stuff.
+    WaitForStableFrameRateBeforeConnectingSocket();
     // @server = ServerConn();
     OnEnabledUpdated();
+}
+
+
+// Coro to make use of menubar showing exceptions
+void ThrowBecause(const string &in msg) {
+    throw(msg);
 }
 
 
@@ -104,6 +129,9 @@ void RenderMenuMain() {
             UI::Text("\\$i\\$999Connection Failures: " + server.connectFailureCount);
         }
 
+#if DEV
+        UI::Text("Last vec3: " + dbg_lastVec3Written.ToString());
+#endif
         UI::Text("Last Msg Sent: " + lastSent);
         UI::Text("Last Msg Recv: " + lastRecv);
         UI::Text("Current Map/Room: " + IfEmpty(GetServerLogin(), NoneStr));

@@ -6,5 +6,5 @@ version  = "1.0.0"
 
 [script]
 #__DEFINES__
-dependencies = ["Camera"]
+dependencies = ["Camera", "VehicleState"]
 optional_dependencies = ["MLFeedRaceData"]
