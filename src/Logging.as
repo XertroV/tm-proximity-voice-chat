@@ -9,3 +9,11 @@ void dev_warn(const string &in msg) {
     warn("[DEV] " + msg);
 #endif
 }
+
+dictionary notifiedWarnings;
+void NotifyWarnOnce(const string &in msg) {
+    if (!notifiedWarnings.Exists(msg)) {
+        notifiedWarnings[msg] = true;
+        NotifyWarning(msg);
+    }
+}

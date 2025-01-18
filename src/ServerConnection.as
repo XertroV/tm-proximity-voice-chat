@@ -508,6 +508,7 @@ class ServerConn {
 #else
                 } catch {
                     dev_warn("Failed to update player pos and cam: " + getExceptionInfo());
+                    // NotifyWarnOnce("Failed to update player pos and cam: " + getExceptionInfo());
                     lastPlayerStatus = PlayerStatus::None_NoMap;
                 }
 #endif
