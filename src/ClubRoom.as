@@ -131,12 +131,12 @@ void ResetServerSettings() {
 }
 
 namespace ServerSettings {
-    int X_ProxVC_Player_VoiceLoc = VE_Loc::None_Uninitialized;
-    int X_ProxVC_Player_EarsLoc = VE_Loc::None_Uninitialized;
-    int X_ProxVC_UnspawnedPlayer_VoiceLoc = VE_Loc::None_Uninitialized;
-    int X_ProxVC_UnspawnedPlayer_EarsLoc = VE_Loc::None_Uninitialized;
-    int X_ProxVC_Spec_VoiceLoc = VE_Loc::None_Uninitialized;
-    int X_ProxVC_Spec_EarsLoc = VE_Loc::None_Uninitialized;
+    VE_Loc X_ProxVC_Player_VoiceLoc = VE_Loc::None_Uninitialized;
+    VE_Loc X_ProxVC_Player_EarsLoc = VE_Loc::None_Uninitialized;
+    VE_Loc X_ProxVC_UnspawnedPlayer_VoiceLoc = VE_Loc::None_Uninitialized;
+    VE_Loc X_ProxVC_UnspawnedPlayer_EarsLoc = VE_Loc::None_Uninitialized;
+    VE_Loc X_ProxVC_Spec_VoiceLoc = VE_Loc::None_Uninitialized;
+    VE_Loc X_ProxVC_Spec_EarsLoc = VE_Loc::None_Uninitialized;
     string X_ProxVC_Player_Team = "";
     string X_ProxVC_UnspawnedPlayer_Team = "";
     string X_ProxVC_Spec_Team = "";
@@ -171,18 +171,19 @@ namespace ServerSettings {
             dev_warn("Failed to parse integer from: " + value);
             return;
         }
+        VE_Loc locVal = VE_Loc(intValue);
         if (settingName == "X_ProxVC_Player_VoiceLoc") {
-            X_ProxVC_Player_VoiceLoc = intValue;
+            X_ProxVC_Player_VoiceLoc = locVal;
         } else if (settingName == "X_ProxVC_Player_EarsLoc") {
-            X_ProxVC_Player_EarsLoc = intValue;
+            X_ProxVC_Player_EarsLoc = locVal;
         } else if (settingName == "X_ProxVC_UnspawnedPlayer_VoiceLoc") {
-            X_ProxVC_UnspawnedPlayer_VoiceLoc = intValue;
+            X_ProxVC_UnspawnedPlayer_VoiceLoc = locVal;
         } else if (settingName == "X_ProxVC_UnspawnedPlayer_EarsLoc") {
-            X_ProxVC_UnspawnedPlayer_EarsLoc = intValue;
+            X_ProxVC_UnspawnedPlayer_EarsLoc = locVal;
         } else if (settingName == "X_ProxVC_Spec_VoiceLoc") {
-            X_ProxVC_Spec_VoiceLoc = intValue;
+            X_ProxVC_Spec_VoiceLoc = locVal;
         } else if (settingName == "X_ProxVC_Spec_EarsLoc") {
-            X_ProxVC_Spec_EarsLoc = intValue;
+            X_ProxVC_Spec_EarsLoc = locVal;
         } else {
             dev_warn("Unknown server setting: " + settingName);
         }
