@@ -6,5 +6,5 @@ version  = "1.0.0"
 
 [script]
 #__DEFINES__
-dependencies = ["Camera", "VehicleState"]
+dependencies = ["Camera", "VehicleState", "NadeoServices"]
 optional_dependencies = ["MLFeedRaceData"]

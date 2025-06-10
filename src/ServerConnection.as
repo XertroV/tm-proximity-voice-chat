@@ -381,35 +381,41 @@ class ServerConn {
     }
 
     void OnUpdatePPAC_NoMap() {
-        // no settings for this
-        // SendZeroPlayerPosAndCam();
         UpdatePPAC_From(socket.s, null, Camera::GetCurrent(), VE_Loc::NearZero, VE_Loc::NearZero);
-        // dev_warn("OnUpdatePPAC_NoMap: " + tostring(VE_Loc::NearZero));
     }
 
     void OnUpdatePPAC_UnspawnedPlayer(HasVectors@ script) {
+        // user settings override defaults
         VE_Loc vl = VE_Loc_OrDefault(S_Unspawned_VoiceLoc, VE_Loc::Camera);
         VE_Loc el = VE_Loc_OrDefault(S_Unspawned_EarsLoc, VE_Loc::Camera);
-        // todo: apply settings preference
-        // todo: apply rules preference
+        // server settings override user settings
+        vl = VE_Loc_OrDefault(ServerSettings::X_ProxVC_UnspawnedPlayer_VoiceLoc, vl);
+        el = VE_Loc_OrDefault(ServerSettings::X_ProxVC_UnspawnedPlayer_EarsLoc, el);
+
         UpdatePPAC_From(socket.s, script, Camera::GetCurrent(), vl, el);
         // dev_warn("OnUpdatePPAC_UnspawnedPlayer: " + tostring(vl));
     }
 
     void OnUpdatePPAC_UnspawnedSpec(HasVectors@ script) {
+        // user settings override defaults
         VE_Loc vl = VE_Loc_OrDefault(S_Spec_VoiceLoc, VE_Loc::Camera);
         VE_Loc el = VE_Loc_OrDefault(S_Spec_EarsLoc, VE_Loc::Camera);
-        // todo: apply settings preference
-        // todo: apply rules preference
+        // server settings override user settings
+        vl = VE_Loc_OrDefault(ServerSettings::X_ProxVC_Spec_VoiceLoc, vl);
+        el = VE_Loc_OrDefault(ServerSettings::X_ProxVC_Spec_EarsLoc, el);
+
         UpdatePPAC_From(socket.s, script, Camera::GetCurrent(), vl, el);
         // dev_warn("OnUpdatePPAC_UnspawnedSpec: " + tostring(vl));
     }
 
     void OnUpdatePPAC_Spawned(HasVectors@ script) {
+        // user settings override defaults
         VE_Loc vl = VE_Loc_OrDefault(S_Spawned_VoiceLoc, VE_Loc::Player);
         VE_Loc el = VE_Loc_OrDefault(S_Spawned_EarsLoc, VE_Loc::Camera);
-        // todo: apply settings preference
-        // todo: apply rules preference
+        // server settings override user settings
+        vl = VE_Loc_OrDefault(ServerSettings::X_ProxVC_Player_VoiceLoc, vl);
+        el = VE_Loc_OrDefault(ServerSettings::X_ProxVC_Player_EarsLoc, el);
+
         UpdatePPAC_From(socket.s, script, Camera::GetCurrent(), vl, el);
         // dev_warn("OnUpdatePPAC_Spawned: " + tostring(vl) + " | " + script.Pos.ToString());
     }
@@ -504,6 +510,27 @@ class ServerConn {
             && s.Write(uint8(1)); // 1 - version/payload marker (json always starts with `{`)
     }
 
+    uint64 lastNullCtxEnd = 0;
+    uint64 lastServerSettingsCheck = 0;
+#if TMNEXT
+    void CheckServerSettings() {
+        // dev_warn("CheckServerSettings starting @ " + Time::Now);
+        auto app = GetApp();
+        if (app.PlaygroundScript !is null) {
+            lastServerSettingsCheck = Time::Now;
+            return;
+        }
+        auto si = cast<CTrackManiaNetworkServerInfo>(app.Network.ServerInfo);
+        if (si.ServerLogin.Length == 0) return;
+        // wait at least 5s before checking server
+        if (lastNullCtxEnd + 5000 > Time::Now) return;
+        lastServerSettingsCheck = Time::Now;
+        auto coro = startnew(CoroutineFunc(_CheckForServerSettings));
+        await(coro);
+        dev_trace("CheckServerSettings finished @ " + Time::Now);
+    }
+#endif
+
     PlayerStatus lastPlayerStatus = PlayerStatus::None_NoMap;
 
     void WatchPosAndCam(uint64 nonce) {
@@ -514,6 +541,10 @@ class ServerConn {
                 return;
             }
             if (app.CurrentPlayground !is null) {
+                if (wasNullCtx) {
+                    lastNullCtxEnd = Time::Now;
+                    lastServerSettingsCheck = 0;
+                }
 #if DEV
 #else
 #endif
@@ -521,7 +552,10 @@ class ServerConn {
 
 #if MP4
                     UpdateMp4_PPAC_InPlayground(app);
-#else
+#elif TMNEXT
+                    if (lastServerSettingsCheck + (10 * 60 * 1000) < Time::Now) {
+                        Meta::StartWithRunContext(Meta::RunContext::AfterScripts, CoroutineFunc(CheckServerSettings));
+                    }
                     UpdateTm2020_PPAC_InPlayground(app);
 #endif
                     wasNullCtx = false;
@@ -530,6 +564,7 @@ class ServerConn {
                     DevNotifyWarning("Failed to update player pos and cam: " + getExceptionInfo());
                     // NotifyWarnOnce("Failed to update player pos and cam: " + getExceptionInfo());
                     lastPlayerStatus = PlayerStatus::None_NoMap;
+                    wasNullCtx = true;
                 }
 #if DEV
 #else
@@ -539,6 +574,7 @@ class ServerConn {
                 if (!wasNullCtx) {
                     wasNullCtx = true;
                     lastPlayerStatus = PlayerStatus::None_NoMap;
+                    FromBRM::ResetClubRoom();
                 }
             }
             yield();
@@ -551,6 +587,33 @@ class ServerConn {
         if (g_LinkAppVersion.Length == 0) g_LinkAppVersion = "1.0.0";
         if (IsVersionLess(g_LinkAppVersion, LATEST_LINK_APP_VERISON)) {
             NotifySuccess("Link app update available:\n\t\tv" + LATEST_LINK_APP_VERISON + "\nYou have:\n\t\tv" + g_LinkAppVersion, 7500);
+        }
+    }
+
+    void _CheckForServerSettings() {
+        FromBRM::OnJoinedServer();
+        if (!FromBRM::FinishedLoading) {
+            dev_warn("FromBRM::FinishedLoading = false after calling OnJoinedServer. Exiting CheckServerSettings.");
+            return;
+        }
+        auto clubId = FromBRM::ClubId;
+        auto roomId = FromBRM::RoomId;
+        auto serverLogin = FromBRM::ServerLogin;
+        if (clubId < 0 || roomId < 0 || serverLogin.Length == 0) {
+            dev_warn("Failed to get clubId, roomId, or serverLogin. Exiting CheckServerSettings.");
+            return;
+        }
+        auto roomJ = Live::GetClubRoom(clubId, roomId);
+        if (roomJ is null) {
+            dev_warn("Failed to get roomJ. Exiting CheckServerSettings.");
+            return;
+        }
+        auto scriptSettings = roomJ["scriptSettings"];
+        auto keys = scriptSettings.GetKeys();
+        for (uint i = 0; i < keys.Length; i++) {
+            if (keys[i].StartsWith("X_ProxVC_")) {
+                RegisterServerSetting(keys[i], scriptSettings[keys[i]]);
+            }
         }
     }
 }

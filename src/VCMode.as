@@ -11,13 +11,13 @@ Spectators & unspawned players are by default are at vec3(-3200)
 -
 
 Okay, I think probably best for user choice for location of voice and ears, unless server settings:
-S_ProxVC_Player_VoiceLoc: VE_Loc
-S_ProxVC_Player_EarsLoc: VE_Loc
-S_ProxVC_UnspawnedPlayer_VoiceLoc: VE_Loc
-S_ProxVC_UnspawnedPlayer_EarsLoc: VE_Loc
-S_ProxVC_Spec_VoiceLoc: VE_Loc
-S_ProxVC_Spec_EarsLoc: VE_Loc
-S_ProxVC_Spec_Team: string -> Spectators are on a team
+X_ProxVC_Player_VoiceLoc: VE_Loc
+X_ProxVC_Player_EarsLoc: VE_Loc
+X_ProxVC_UnspawnedPlayer_VoiceLoc: VE_Loc
+X_ProxVC_UnspawnedPlayer_EarsLoc: VE_Loc
+X_ProxVC_Spec_VoiceLoc: VE_Loc
+X_ProxVC_Spec_EarsLoc: VE_Loc
+X_ProxVC_Spec_Team: string -> Spectators are on a team
     default: no change
 
 
