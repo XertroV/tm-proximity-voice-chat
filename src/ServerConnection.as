@@ -283,10 +283,10 @@ class ServerConn {
 
 
     void AddMessageHandlers() {
-        @msgHandlers["ConnectedStatus"] = MsgHandler(OnMsg_ConnectedStatus);
-        @msgHandlers["Ping"] = MsgHandler(OnMsg_Ping);
-        @msgHandlers["LinkAppInfo"] = MsgHandler(OnMsg_LinkAppInfo);
-        @msgHandlers["ShutdownNow"] = MsgHandler(OnMsg_ShutdownNow);
+        @msgHandlers["ConnectedStatus"] = cast<MsgHandler>(OnMsg_ConnectedStatus);
+        @msgHandlers["Ping"] = cast<MsgHandler>(OnMsg_Ping);
+        @msgHandlers["LinkAppInfo"] = cast<MsgHandler>(OnMsg_LinkAppInfo);
+        @msgHandlers["ShutdownNow"] = cast<MsgHandler>(OnMsg_ShutdownNow);
     }
 
     // server login on map uid

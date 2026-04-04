@@ -102,7 +102,7 @@ void UI_PaddedAlert_Pill(const string &in msg, const vec4 &in bgColor) {
     float textW = avail.x * 0.9;
     float textIndent = avail.x * 0.05;
     float textTopPad = 10;
-    vec2 textBox = Draw::MeasureString(msg, f_DS16B, 16.0, textW);
+    vec2 textBox = UI::MeasureString(msg, f_DS16B, 16.0, textW);
     auto size = vec2(avail.x, textBox.y + textTopPad * 2);
 
     UI::Dummy(size);
@@ -142,7 +142,7 @@ void UI_Padded_PillSm(const string &in msg, const vec4 &in bgColor) {
     auto winPos = UI::GetWindowPos();
 
     UI::PushFont(f_DS16B);
-    vec2 textBox = Draw::MeasureString(msg, f_DS16B, 16.0);
+    vec2 textBox = UI::MeasureString(msg, f_DS16B, 16.0);
     auto fullX = textBox.x + 20;
     UI::AlignTextToFramePadding();
     auto fullY = UI::GetFrameHeight();
